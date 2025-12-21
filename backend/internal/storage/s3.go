@@ -8,7 +8,7 @@ import (
 
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/config"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -29,9 +29,9 @@ func NewS3Client(cfg config.AWSConfig) (*S3Client, error) {
 
 	if cfg.Endpoint != "" {
 		// LocalStack configuration
-		awsCfg, err = config.LoadDefaultConfig(ctx,
-			config.WithRegion(cfg.Region),
-			config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
+		awsCfg, err = awsconfig.LoadDefaultConfig(ctx,
+			awsconfig.WithRegion(cfg.Region),
+			awsconfig.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
 				func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 					return aws.Endpoint{
 						URL:               cfg.Endpoint,
@@ -39,7 +39,7 @@ func NewS3Client(cfg config.AWSConfig) (*S3Client, error) {
 					}, nil
 				},
 			)),
-			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 				cfg.AccessKeyID,
 				cfg.SecretAccessKey,
 				"",
@@ -47,8 +47,8 @@ func NewS3Client(cfg config.AWSConfig) (*S3Client, error) {
 		)
 	} else {
 		// Production AWS S3 configuration
-		awsCfg, err = config.LoadDefaultConfig(ctx,
-			config.WithRegion(cfg.Region),
+		awsCfg, err = awsconfig.LoadDefaultConfig(ctx,
+			awsconfig.WithRegion(cfg.Region),
 		)
 	}
 

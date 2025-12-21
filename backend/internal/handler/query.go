@@ -43,10 +43,15 @@ func (h *QueryHandler) Query(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Implement RAG query
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "query not implemented yet",
-	})
+	// Perform RAG query
+	response, err := h.ragService.Query(c.Context(), userID, req.Question)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(response)
 }
 
 // StreamQuery handles streaming RAG queries
@@ -58,7 +63,7 @@ func (h *QueryHandler) StreamQuery(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Implement streaming query
+	// TODO: Implement streaming query with SSE
 	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
 		"error": "streaming query not implemented yet",
 	})

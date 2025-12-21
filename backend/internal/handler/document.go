@@ -25,9 +25,25 @@ func (h *DocumentHandler) Upload(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Implement file upload logic
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "upload not implemented yet",
+	// Get uploaded file
+	file, err := c.FormFile("file")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "no file uploaded",
+		})
+	}
+
+	// Process document
+	doc, err := h.documentService.UploadDocument(c.Context(), userID, file)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message":  "document uploaded successfully",
+		"document": doc,
 	})
 }
 
@@ -40,9 +56,15 @@ func (h *DocumentHandler) List(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Implement list documents
+	documents, err := h.documentService.ListDocuments(c.Context(), userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to list documents",
+		})
+	}
+
 	return c.JSON(fiber.Map{
-		"documents": []interface{}{},
+		"documents": documents,
 	})
 }
 
@@ -62,9 +84,15 @@ func (h *DocumentHandler) Get(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Implement get document
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "get document not implemented yet",
+	doc, err := h.documentService.GetDocument(c.Context(), userID, documentID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"document": doc,
 	})
 }
 
@@ -84,8 +112,13 @@ func (h *DocumentHandler) Delete(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Implement delete document
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "delete document not implemented yet",
+	if err := h.documentService.DeleteDocument(c.Context(), userID, documentID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "document deleted successfully",
 	})
 }

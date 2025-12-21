@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -65,7 +64,7 @@ func main() {
 	// Initialize services
 	embeddingService := service.NewEmbeddingService(cfg.OpenAIKey)
 	documentService := service.NewDocumentService(documentRepo, vectorRepo, s3Client, embeddingService)
-	ragService := service.NewRAGService(vectorRepo, embeddingService, cfg.OpenAIKey)
+	ragService := service.NewRAGService(vectorRepo, embeddingService, cfg.OpenAIKey, documentRepo)
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 
 	// Initialize Fiber app
@@ -112,7 +111,7 @@ func main() {
 
 	// Protected routes
 	protected := api.Group("", middleware.AuthRequired(cfg.JWTSecret))
-	
+
 	// Document routes
 	documents := protected.Group("/documents")
 	documents.Post("/upload", documentHandler.Upload)

@@ -86,10 +86,10 @@ func (r *VectorRepository) Search(ctx context.Context, userID string, vector []f
 
 // DeleteByDocumentID deletes all vectors for a document
 func (r *VectorRepository) DeleteByDocumentID(ctx context.Context, userID, documentID string) error {
-	collectionName := r.GetCollectionName(userID)
+	_ = r.GetCollectionName(userID)
 
-	// TODO: Implement delete by filter
-	_ = collectionName
+	// TODO: Implement delete by filter using Points client
+	// This requires filtering by document_id in the payload
 	_ = documentID
 
 	return fmt.Errorf("delete by document ID not fully implemented yet")

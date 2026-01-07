@@ -97,6 +97,8 @@ func main() {
 		AppName:      "RAG Personal Assistant",
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
+		// Allow larger uploads (e.g., PDFs)
+		BodyLimit: 50 * 1024 * 1024, // 50 MB
 	})
 
 	// Global middleware

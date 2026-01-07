@@ -42,7 +42,7 @@ func (r *VectorRepository) EnsureCollection(ctx context.Context, userID string, 
 
 // InsertVectors inserts vectors into a user's collection
 func (r *VectorRepository) InsertVectors(ctx context.Context, userID string, points []*model.VectorPoint) error {
-	collectionName := r.GetCollectionName(userID)
+	_ = r.GetCollectionName(userID) // TODO: use when implementing upsert
 
 	// Convert to Qdrant points
 	qdrantPoints := make([]*qdrant.PointStruct, len(points))
@@ -65,7 +65,8 @@ func (r *VectorRepository) InsertVectors(ctx context.Context, userID string, poi
 	}
 
 	// TODO: Implement upsert vectors to Qdrant
-	// This requires the Points client, not Collections client
+	// This requires the Points client
+	_ = qdrantPoints
 
 	return fmt.Errorf("insert vectors not fully implemented yet")
 }

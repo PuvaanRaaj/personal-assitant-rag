@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/PuvaanRaaj/personal-rag-agent/internal/logger"
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/repository"
 )
 
@@ -129,7 +130,10 @@ CRITICAL: Base your answer ONLY on the provided context. Do not use external kno
 		"sources": sources,
 	}); err != nil {
 		// Log error but don't fail the request
-		fmt.Printf("Failed to save query history: %v\n", err)
+		logger.Error("Failed to save query history",
+			"user_id", userID,
+			"error", err,
+		)
 	}
 
 	return &QueryResponse{

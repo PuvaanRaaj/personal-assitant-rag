@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,13 +9,14 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/logger"
+	fiberlogger "github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/joho/godotenv"
 
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/config"
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/database"
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/handler"
+	"github.com/PuvaanRaaj/personal-rag-agent/internal/logger"
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/middleware"
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/repository"
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/service"
@@ -26,36 +26,60 @@ import (
 func main() {
 	// Load environment variables
 	if err := godotenv.Load("../.env"); err != nil {
-		log.Println("No .env file found, using system environment variables")
+		// This is expected when running in Docker
 	}
 
 	// Initialize configuration
 	cfg := config.Load()
 
+	// Initialize structured logger (OTel-compatible)
+	env := os.Getenv("ENVIRONMENT")
+	if env == "" {
+		env = "development"
+	}
+	logger.InitLogger(env)
+
+	logger.Info("Starting RAG Personal Assistant",
+		"environment", env,
+		"port", cfg.Port,
+	)
+
 	// Initialize database
 	db, err := database.NewPostgresDB(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		logger.Fatal("Failed to connect to database", "error", err)
 	}
 	defer db.Close()
+	logger.Info("Database connected successfully")
 
 	// Run migrations
 	if err := database.RunMigrations(db); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
+		logger.Fatal("Failed to run migrations", "error", err)
 	}
+	logger.Info("Database migrations completed")
 
 	// Initialize storage driver (local, localstack, or s3)
 	storageDriver, err := storage.NewStorageDriver(cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize storage driver (%s): %v", cfg.StorageDriver, err)
+		logger.Fatal("Failed to initialize storage driver",
+			"driver", cfg.StorageDriver,
+			"error", err,
+		)
 	}
-	log.Printf("📦 Using storage driver: %s", cfg.StorageDriver)
+	logger.Info("Storage driver initialized",
+		"driver", cfg.StorageDriver,
+		"local_path", cfg.LocalStoragePath,
+	)
 
 	// Initialize Qdrant client
 	qdrantClient, err := storage.NewQdrantClient(cfg.QdrantURL)
 	if err != nil {
-		log.Fatalf("Failed to initialize Qdrant client: %v", err)
+		logger.Fatal("Failed to initialize Qdrant client",
+			"url", cfg.QdrantURL,
+			"error", err,
+		)
 	}
+	logger.Info("Qdrant client initialized", "url", cfg.QdrantURL)
 
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
@@ -77,7 +101,7 @@ func main() {
 
 	// Global middleware
 	app.Use(recover.New())
-	app.Use(logger.New(logger.Config{
+	app.Use(fiberlogger.New(fiberlogger.Config{
 		Format: "[${time}] ${status} - ${method} ${path} (${latency})\n",
 	}))
 	app.Use(cors.New(cors.Config{
@@ -143,23 +167,28 @@ func main() {
 			if httpsPort == "" {
 				httpsPort = "8443"
 			}
-			log.Printf("Starting HTTPS server on port %s", httpsPort)
+			logger.Info("Starting HTTPS server",
+				"port", httpsPort,
+				"cert", tlsCertFile,
+			)
 			if err := app.ListenTLS(":"+httpsPort, tlsCertFile, tlsKeyFile); err != nil {
-				log.Fatalf("HTTPS server failed to start: %v", err)
+				logger.Fatal("HTTPS server failed to start", "error", err)
 			}
 		} else {
 			// Start HTTP server
-			log.Printf("Starting HTTP server on port %s", port)
+			logger.Info("Starting HTTP server", "port", port)
 			if err := app.Listen(":" + port); err != nil {
-				log.Fatalf("Server failed to start: %v", err)
+				logger.Fatal("Server failed to start", "error", err)
 			}
 		}
 	}()
 
 	if tlsCertFile != "" && tlsKeyFile != "" {
-		log.Printf("Server started with HTTPS")
+		logger.Info("Server started with HTTPS",
+			"https_port", os.Getenv("HTTPS_PORT"),
+		)
 	} else {
-		log.Printf("Server started on port %s (HTTP)", port)
+		logger.Info("Server started with HTTP", "port", port)
 	}
 
 	// Wait for interrupt signal
@@ -167,13 +196,13 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	logger.Info("Shutting down server...")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := app.ShutdownWithContext(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		logger.Fatal("Server forced to shutdown", "error", err)
 	}
 
-	log.Println("Server exited gracefully")
+	logger.Info("Server exited gracefully")
 }

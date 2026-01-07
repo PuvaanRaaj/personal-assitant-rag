@@ -7,23 +7,13 @@ services:
       dockerfile: ../docker/Dockerfile.backend
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
-      - PORT=8080
+      # Override with container network hostnames
       - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=rag_user
-      - DB_PASSWORD=${DB_PASSWORD:-password}
-      - DB_NAME=rag_assistant
-      - DB_SSLMODE=disable
       - QDRANT_URL=qdrant:6333
       - AWS_ENDPOINT=http://localstack:4566
-      - AWS_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
-      - S3_BUCKET=rag-assistant-uploads
-      - JWT_SECRET=${JWT_SECRET:-change-this-in-production}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ALLOWED_ORIGINS=http://localhost:3000
     depends_on:
       postgres:
         condition: service_healthy

@@ -6,14 +6,14 @@ WORKDIR /app
 # Install build dependencies
 RUN apk add --no-cache git
 
-# Copy go mod files
-COPY go.mod go.sum* ./
+# Copy go mod files from backend directory
+COPY backend/go.mod backend/go.sum* ./
 
 # Download dependencies
 RUN go mod download || true
 
-# Copy source code
-COPY . .
+# Copy source code from backend directory
+COPY backend/ .
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/server
@@ -29,8 +29,8 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/server .
 
-# Copy entrypoint script (copied from docker/ during build via docker-compose context)
-COPY entrypoint.sh /entrypoint.sh
+# Copy entrypoint script from docker directory
+COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Create certs directory

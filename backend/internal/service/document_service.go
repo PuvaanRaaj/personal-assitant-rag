@@ -21,7 +21,7 @@ import (
 type DocumentService struct {
 	documentRepo     *repository.DocumentRepository
 	vectorRepo       *repository.VectorRepository
-	s3Client         *storage.S3Client
+	storageDriver    storage.StorageDriver
 	embeddingService *EmbeddingService
 }
 
@@ -29,13 +29,13 @@ type DocumentService struct {
 func NewDocumentService(
 	documentRepo *repository.DocumentRepository,
 	vectorRepo *repository.VectorRepository,
-	s3Client *storage.S3Client,
+	storageDriver storage.StorageDriver,
 	embeddingService *EmbeddingService,
 ) *DocumentService {
 	return &DocumentService{
 		documentRepo:     documentRepo,
 		vectorRepo:       vectorRepo,
-		s3Client:         s3Client,
+		storageDriver:    storageDriver,
 		embeddingService: embeddingService,
 	}
 }
@@ -102,10 +102,10 @@ func (s *DocumentService) UploadDocument(ctx context.Context, userID string, fil
 		return nil, fmt.Errorf("failed to generate embeddings: %w", err)
 	}
 
-	// Upload to S3
+	// Upload to storage
 	storagePath := fmt.Sprintf("%s/%s/%s", userID, fileHash, file.Filename)
-	if err := s.s3Client.UploadFile(ctx, storagePath, bytes.NewReader(content)); err != nil {
-		return nil, fmt.Errorf("failed to upload to S3: %w", err)
+	if err := s.storageDriver.UploadFile(ctx, storagePath, bytes.NewReader(content)); err != nil {
+		return nil, fmt.Errorf("failed to upload file: %w", err)
 	}
 
 	// Create document record
@@ -182,9 +182,9 @@ func (s *DocumentService) DeleteDocument(ctx context.Context, userID, documentID
 		return err
 	}
 
-	// Delete from S3
-	if err := s.s3Client.DeleteFile(ctx, doc.StoragePath); err != nil {
-		return fmt.Errorf("failed to delete from S3: %w", err)
+	// Delete from storage
+	if err := s.storageDriver.DeleteFile(ctx, doc.StoragePath); err != nil {
+		return fmt.Errorf("failed to delete file: %w", err)
 	}
 
 	// Delete vectors

@@ -14,6 +14,10 @@ type Config struct {
 	// Database
 	DatabaseURL string
 
+	// Storage
+	StorageDriver    string // "local", "localstack", or "s3"
+	LocalStoragePath string // Path for local filesystem storage
+
 	// AWS S3
 	AWSConfig AWSConfig
 
@@ -39,9 +43,11 @@ type AWSConfig struct {
 // Load reads configuration from environment variables
 func Load() *Config {
 	return &Config{
-		Port:           getEnv("PORT", "8080"),
-		AllowedOrigins: getEnv("ALLOWED_ORIGINS", "http://localhost:3000"),
-		DatabaseURL:    getEnv("DATABASE_URL", buildDatabaseURL()),
+		Port:             getEnv("PORT", "8080"),
+		AllowedOrigins:   getEnv("ALLOWED_ORIGINS", "http://localhost:3000"),
+		DatabaseURL:      getEnv("DATABASE_URL", buildDatabaseURL()),
+		StorageDriver:    getEnv("FILESYSTEM_DRIVER", "localstack"), // Default to localstack for Docker
+		LocalStoragePath: getEnv("LOCAL_STORAGE_PATH", "./uploads"),
 		AWSConfig: AWSConfig{
 			Region:          getEnv("AWS_REGION", "us-east-1"),
 			Endpoint:        getEnv("AWS_ENDPOINT", ""), // Empty for real AWS S3

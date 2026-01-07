@@ -44,11 +44,12 @@ func main() {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
-	// Initialize S3 client
-	s3Client, err := storage.NewS3Client(cfg.AWSConfig)
+	// Initialize storage driver (local, localstack, or s3)
+	storageDriver, err := storage.NewStorageDriver(cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize S3 client: %v", err)
+		log.Fatalf("Failed to initialize storage driver (%s): %v", cfg.StorageDriver, err)
 	}
+	log.Printf("📦 Using storage driver: %s", cfg.StorageDriver)
 
 	// Initialize Qdrant client
 	qdrantClient, err := storage.NewQdrantClient(cfg.QdrantURL)
@@ -63,7 +64,7 @@ func main() {
 
 	// Initialize services
 	embeddingService := service.NewEmbeddingService(cfg.OpenAIKey)
-	documentService := service.NewDocumentService(documentRepo, vectorRepo, s3Client, embeddingService)
+	documentService := service.NewDocumentService(documentRepo, vectorRepo, storageDriver, embeddingService)
 	ragService := service.NewRAGService(vectorRepo, embeddingService, cfg.OpenAIKey, documentRepo)
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 
@@ -130,14 +131,36 @@ func main() {
 		port = "8080"
 	}
 
+	// Check for TLS configuration
+	tlsCertFile := os.Getenv("TLS_CERT_FILE")
+	tlsKeyFile := os.Getenv("TLS_KEY_FILE")
+
 	// Graceful shutdown
 	go func() {
-		if err := app.Listen(":" + port); err != nil {
-			log.Fatalf("Server failed to start: %v", err)
+		if tlsCertFile != "" && tlsKeyFile != "" {
+			// Start HTTPS server
+			httpsPort := os.Getenv("HTTPS_PORT")
+			if httpsPort == "" {
+				httpsPort = "8443"
+			}
+			log.Printf("Starting HTTPS server on port %s", httpsPort)
+			if err := app.ListenTLS(":"+httpsPort, tlsCertFile, tlsKeyFile); err != nil {
+				log.Fatalf("HTTPS server failed to start: %v", err)
+			}
+		} else {
+			// Start HTTP server
+			log.Printf("Starting HTTP server on port %s", port)
+			if err := app.Listen(":" + port); err != nil {
+				log.Fatalf("Server failed to start: %v", err)
+			}
 		}
 	}()
 
-	log.Printf("🚀 Server started on port %s", port)
+	if tlsCertFile != "" && tlsKeyFile != "" {
+		log.Printf("Server started with HTTPS")
+	} else {
+		log.Printf("Server started on port %s (HTTP)", port)
+	}
 
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)

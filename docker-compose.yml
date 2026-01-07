@@ -3,10 +3,11 @@ version: "3.8"
 services:
   backend:
     build:
-      context: ./backend
-      dockerfile: ../docker/Dockerfile.backend
+      context: .
+      dockerfile: docker/Dockerfile.backend
     ports:
       - "8080:8080"
+      - "8443:8443"
     env_file:
       - .env
     environment:
@@ -14,6 +15,7 @@ services:
       - DB_HOST=postgres
       - QDRANT_URL=qdrant:6333
       - AWS_ENDPOINT=http://localstack:4566
+      - HTTPS_PORT=8443
     depends_on:
       postgres:
         condition: service_healthy

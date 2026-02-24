@@ -17,6 +17,8 @@ type Config struct {
 	// Storage
 	StorageDriver    string // "local", "localstack", or "s3"
 	LocalStoragePath string // Path for local filesystem storage
+	KnowledgeBasePath string // Path for local knowledge base folder
+	DefaultUserID     string // Default user ID for local indexing
 
 	// AWS S3
 	AWSConfig AWSConfig
@@ -48,6 +50,8 @@ func Load() *Config {
 		DatabaseURL:      getEnv("DATABASE_URL", buildDatabaseURL()),
 		StorageDriver:    getEnv("FILESYSTEM_DRIVER", "localstack"), // Default to localstack for Docker
 		LocalStoragePath: getEnv("LOCAL_STORAGE_PATH", "./uploads"),
+		KnowledgeBasePath: getEnv("KNOWLEDGE_BASE_PATH", "./knowledgebase"),
+		DefaultUserID:     getEnv("DEFAULT_USER_ID", "local-user"),
 		AWSConfig: AWSConfig{
 			Region:          getEnv("AWS_REGION", "us-east-1"),
 			Endpoint:        getEnv("AWS_ENDPOINT", ""), // Empty for real AWS S3

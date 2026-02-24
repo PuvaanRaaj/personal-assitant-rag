@@ -88,29 +88,9 @@ services:
       retries: 3
     networks:
       - rag-network
-
-  # LocalStack - Commented out due to volume permission issues
-  # Uncomment when needed for S3 testing
-  # localstack:
-  #   image: localstack/localstack:latest
-  #   ports:
-  #     - "4566:4566"
-  #   environment:
-  #     - SERVICES=s3
-  #     - DEBUG=1
-  #     - DATA_DIR=/tmp/localstack/data
-  #     - AWS_ACCESS_KEY_ID=test
-  #     - AWS_SECRET_ACCESS_KEY=test
-  #   volumes:
-  #     - localstack_data:/tmp/localstack
-  #     - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-aws.sh:ro
-  #   networks:
-  #     - rag-network
-
 volumes:
   postgres_data:
   qdrant_data:
-  # localstack_data:
 
 networks:
   rag-network:

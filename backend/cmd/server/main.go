@@ -21,6 +21,7 @@ import (
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/repository"
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/service"
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/storage"
+	"github.com/PuvaanRaaj/personal-rag-agent/internal/watcher"
 )
 
 func main() {
@@ -92,6 +93,28 @@ func main() {
 	ragService := service.NewRAGService(vectorRepo, embeddingService, cfg.OpenAIKey, documentRepo)
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 
+	// Initialize Knowledge Base Watcher
+	kbWatcher, err := watcher.NewWatcher(cfg.KnowledgeBasePath, cfg.DefaultUserID, documentService)
+	if err != nil {
+		logger.Fatal("Failed to initialize knowledge base watcher", "error", err)
+	}
+	
+	// Start watcher in background
+	watcherCtx, watcherCancel := context.WithCancel(context.Background())
+	defer watcherCancel()
+	if err := kbWatcher.Start(watcherCtx); err != nil {
+		logger.Fatal("Failed to start knowledge base watcher", "error", err)
+	}
+	defer kbWatcher.Close()
+
+	// Perform initial sync
+	go func() {
+		time.Sleep(2 * time.Second) // Wait for server to be ready
+		if err := kbWatcher.Sync(context.Background()); err != nil {
+			logger.Error("Initial sync failed", "error", err)
+		}
+	}()
+
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
 		AppName:      "RAG Personal Assistant",
@@ -142,6 +165,17 @@ func main() {
 	// Document routes
 	documents := protected.Group("/documents")
 	documents.Post("/upload", documentHandler.Upload)
+	documents.Post("/sync", func(c *fiber.Ctx) error {
+		// Manual sync trigger
+		go func() {
+			if err := kbWatcher.Sync(context.Background()); err != nil {
+				logger.Error("Manual sync failed", "error", err)
+			}
+		}()
+		return c.JSON(fiber.Map{
+			"message": "sync triggered successfully",
+		})
+	})
 	documents.Get("", documentHandler.List)
 	documents.Get("/:id", documentHandler.Get)
 	documents.Delete("/:id", documentHandler.Delete)

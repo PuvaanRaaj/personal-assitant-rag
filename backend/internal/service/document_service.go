@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/repository"
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/storage"
 	"github.com/PuvaanRaaj/personal-rag-agent/internal/utils"
+	"github.com/ledongthuc/pdf"
 )
 
 // DocumentService handles document operations
@@ -78,16 +80,24 @@ func (s *DocumentService) UploadDocument(ctx context.Context, userID string, fil
 	// Extract text based on file type
 	var text string
 	switch ext {
-	case ".txt", ".md":
-		text = string(content)
-	case ".json", ".csv":
+	case ".txt", ".md", ".json", ".csv":
 		text = string(content)
 	case ".pdf":
-		// Simple text extraction (for now, treat as text)
-		// TODO: Add proper PDF parsing with unipdf
-		text = string(content)
-	default:
-		return nil, fmt.Errorf("unsupported file type")
+		// Write to temporary file for PDF extraction
+		tempFile, err := os.CreateTemp("", "upload-*.pdf")
+		if err != nil {
+			return nil, fmt.Errorf("failed to create temp file: %w", err)
+		}
+		defer os.Remove(tempFile.Name())
+		if _, err := tempFile.Write(content); err != nil {
+			return nil, fmt.Errorf("failed to write temp file: %w", err)
+		}
+		tempFile.Close()
+
+		text, err = s.extractTextFromPDF(tempFile.Name())
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract text from PDF: %w", err)
+		}
 	}
 
 	// Chunk the text
@@ -152,6 +162,127 @@ func (s *DocumentService) UploadDocument(ctx context.Context, userID string, fil
 	}
 
 	return doc, nil
+}
+
+// ProcessLocalFile processes a file from the local filesystem
+func (s *DocumentService) ProcessLocalFile(ctx context.Context, userID string, filePath string) (*model.Document, error) {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	allowedTypes := map[string]bool{
+		".pdf": true, ".txt": true, ".md": true,
+		".json": true, ".csv": true,
+	}
+	if !allowedTypes[ext] {
+		return nil, fmt.Errorf("unsupported file type: %s", ext)
+	}
+
+	// Read file
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Calculate hash
+	hash := sha256.Sum256(content)
+	fileHash := hex.EncodeToString(hash[:])
+
+	// Extract text based on file type
+	var text string
+	switch ext {
+	case ".txt", ".md", ".json", ".csv":
+		text = string(content)
+	case ".pdf":
+		text, err = s.extractTextFromPDF(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract text from PDF: %w", err)
+		}
+	}
+
+	// Chunk the text
+	chunks := utils.ChunkText(text, 500, 50)
+	if len(chunks) == 0 {
+		return nil, fmt.Errorf("no text content found in document")
+	}
+
+	// Generate embeddings
+	embeddings, err := s.embeddingService.GenerateEmbeddings(ctx, chunks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate embeddings: %w", err)
+	}
+
+	// Storage path (use relative path from knowledge base if possible)
+	filename := filepath.Base(filePath)
+	storagePath := fmt.Sprintf("%s/%s/%s", userID, fileHash, filename)
+	
+	// Upload to storage if it's not already there (or just use local driver)
+	if err := s.storageDriver.UploadFile(ctx, storagePath, bytes.NewReader(content)); err != nil {
+		return nil, fmt.Errorf("failed to upload file: %w", err)
+	}
+
+	// Create document record
+	doc := &model.Document{
+		UserID:      userID,
+		Filename:    filename,
+		FileType:    ext,
+		FileSize:    int64(len(content)),
+		FileHash:    fileHash,
+		StoragePath: storagePath,
+		TotalChunks: len(chunks),
+	}
+
+	if err := s.documentRepo.Create(ctx, doc); err != nil {
+		return nil, fmt.Errorf("failed to create document record: %w", err)
+	}
+
+	// Ensure vector collection exists
+	vectorSize := uint64(s.embeddingService.GetDimensions())
+	if err := s.vectorRepo.EnsureCollection(ctx, userID, vectorSize); err != nil {
+		return nil, fmt.Errorf("failed to ensure collection: %w", err)
+	}
+
+	// Store vectors
+	var points []*model.VectorPoint
+	for i, embedding := range embeddings {
+		point := &model.VectorPoint{
+			ID:     fmt.Sprintf("%s_chunk_%d", doc.ID, i),
+			Vector: embedding,
+			Payload: map[string]interface{}{
+				"document_id": doc.ID,
+				"user_id":     userID,
+				"filename":    filename,
+				"file_type":   ext,
+				"chunk_index": i,
+				"content":     chunks[i],
+			},
+		}
+		points = append(points, point)
+	}
+
+	if err := s.vectorRepo.InsertVectors(ctx, userID, points); err != nil {
+		return nil, fmt.Errorf("failed to insert vectors: %w", err)
+	}
+
+	return doc, nil
+}
+
+func (s *DocumentService) extractTextFromPDF(path string) (string, error) {
+	f, r, err := pdf.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	var buf bytes.Buffer
+	b, err := r.GetPlainText()
+	if err != nil {
+		return "", err
+	}
+	
+	_, err = io.Copy(&buf, b)
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
 }
 
 // ListDocuments lists all documents for a user

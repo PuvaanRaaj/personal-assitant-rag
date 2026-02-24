@@ -82,6 +82,11 @@ export const documentsApi = {
   delete: async (id: string) => {
     await api.delete(`/documents/${id}`);
   },
+
+  sync: async () => {
+    const { data } = await api.post('/documents/sync');
+    return data;
+  },
 };
 
 // Query API
